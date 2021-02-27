@@ -59,14 +59,15 @@ class Environment:
 
 class Agent:
     """ Class representing the agent """
-    def __init__(self, environment: Environment, epsilon: float):
+    def __init__(self, environment: Environment, epsilon: float, initial_value: float = 0.0):
         """
         environment - the environment the agent is going to interact with
         epsilon - the value of epsilon to control exploration
+        initial_value - Optimistic initial value - to support early exploration
         """
         self.env = environment
         self.epsilon = epsilon
-        self.q_values = np.zeros(self.env.get_nr_of_arms())
+        self.q_values = np.full(self.env.get_nr_of_arms(), initial_value)
         self.arm_counts = np.zeros(self.env.get_nr_of_arms())
 
     def choose_action(self) -> int:
@@ -98,15 +99,17 @@ class Agent:
 
 class Simulation:
     """ Class to run a simulation """
-    def __init__(self, nr_of_arms: int, epsilon: float, nr_of_steps: int):
+    def __init__(self, nr_of_arms: int, epsilon: float, nr_of_steps: int, initial_value: float = 0.0):
         """
         nr_of_arms - how many arms the environment will have
         epsilon - parameter to contorl exploration
         nr_of_steps - how many steps to simulate
+        initial_value - Optimistic initial value - to support early exploration
         """
         self.nr_of_arms = nr_of_arms
         self.epsilon = epsilon
         self.nr_of_steps = nr_of_steps
+        self.initial_value = initial_value
 
     def simulate(self) -> [float]:
         """
@@ -121,7 +124,7 @@ class Simulation:
         # Create the environment
         env = Environment(arms)
         # Create the agent
-        agent = Agent(env, self.epsilon)
+        agent = Agent(env, self.epsilon, self.initial_value)
 
         scores = [0]
         averages = []
