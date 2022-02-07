@@ -2,13 +2,30 @@ from enum import Enum
 
 
 class Color(Enum):
-  RED = 1
-  GREEN = 2
-  BLUE = 3
-  YELLOW = 4
-  WHITE = 5
-  ORANGE = 6
-  
+    RED = 0
+    GREEN = 1
+    BLUE = 2
+    YELLOW = 3
+    WHITE = 4
+    ORANGE = 5
+
+
 class Direction(Enum):
-  CLOCKWISE = 1
-  COUNTER_CLOCKWISE = -1
+    CLOCKWISE = 1
+    COUNTER_CLOCKWISE = -1
+
+
+class SideType(Enum):
+    TOP = 0
+    LEFT = 1
+    FRONT = 2
+    RIGHT = 3
+    BACK = 4
+    BOTTOM = 5
+
+
+class Position(Enum):
+    LEFT_UP = 0
+    RIGHT_UP = 1
+    RIGHT_BOTTOM = 2
+    LEFT_BOTTOM = 3
