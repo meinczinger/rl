@@ -1,6 +1,7 @@
 {
     "python.formatting.provider": "black",
     "terminal.integrated.env.osx": {
-        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/mc_tabular:${workspaceFolder}/mab"
-    }
+        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/tabular:${workspaceFolder}/mab"
+    },
+    "jupyter.notebookFileRoot": "${workspaceFolder}:${workspaceFolder}/tabular"
 }
