@@ -32,9 +32,6 @@ class TabularBase(abc.ABC):
     def step(self, state, new_state, action, reward, done) -> float:
         pass
 
-    def test(self) -> list:
-        return [0, 1]
-
     def learn(self, nr_of_episodes: int) -> tuple:
         self.initialize()
         steps_total = []
