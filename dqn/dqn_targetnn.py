@@ -6,12 +6,16 @@ import gymnasium as gym
 
 
 class DQNWithTargetNet(DQNDecorator):
-    def __init__(self, decorated_dqn: AbstractDQN, target_net: NeuralNetwork):
+    def __init__(
+        self,
+        decorated_dqn: AbstractDQN,
+        target_net: NeuralNetwork,
+        update_target_frequency,
+    ):
         super().__init__(decorated_dqn)
 
         self.target_net = target_net
-
-        self.update_target_counter = 0
+        self.update_target_frequency = update_target_frequency
 
 
 def after_optimize(self):
@@ -21,11 +25,10 @@ def after_optimize(self):
 
     self.optimizer.step()
 
-    if (self.update_target_counter % self.update_target_frequency) == 0:
+    if (self.number_of_steps % self.update_target_frequency) == 0:
         self.target_net.load_state_dict(self.neural_net.state_dict())
-
-    self.update_target_counter += 1
 
 
 def new_state_values(self, new_state):
-    return self.target_net(new_state).detach()
+    pre_processed_state = torch.cat([self.preprocess_state(new_state)])
+    return self.target_net(pre_processed_state).detach()

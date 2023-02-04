@@ -18,7 +18,7 @@ class DQNWithMemory(DQNDecorator):
         self.batch_size = batch_size
 
     def after_step(self, state, new_state, action, reward, done):
-        self.memory.push(state, action, new_state, reward, done)
+        self.memory.push(state, action, new_state, reward, 1 if done else 0)
 
     def can_optimize(self):
         return len(self.memory) >= self.batch_size
@@ -28,9 +28,17 @@ class DQNWithMemory(DQNDecorator):
 
         state, action, new_state, reward, done = self.memory.sample(self.batch_size)
 
+        state = [self.decorated_dqn.preprocess_state(frame) for frame in state]
+        torch.cat(state)
+
+        new_state = [self.decorated_dqn.preprocess_state(frame) for frame in new_state]
+        torch.cat(new_state)
+
         return (
-            torch.Tensor(state).to(self.device),
-            torch.Tensor(new_state).to(self.device),
+            # torch.Tensor(state).to(self.device),
+            state,
+            # torch.Tensor(new_state).to(self.device),
+            new_state,
             torch.Tensor(reward).to(self.device),
             torch.LongTensor(action).to(self.device),
             torch.Tensor(done).to(self.device),
