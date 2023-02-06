@@ -1,6 +1,4 @@
 from dqn.dqn_base import ConcreteDQN
-from dqn.dqn_memory import DQNWithMemory
-from dqn.dqn_targetnn import DQNWithTargetNet
 from dqn.neural_net import NeuralNetworkWithCNN
 from dqn.memory import ExperienceReplay
 import gymnasium as gym
@@ -22,7 +20,15 @@ def preprocess_state(state, device):
     state = torch.from_numpy(state)
     state = state.to(device, dtype=torch.float32)
     state = state.unsqueeze(1)
+    # state = state.transpose((2, 0, 1))
     return state
+    # frame = np.expand_dims(frame, axis=0)
+    # frame = frame.transpose((2,0,1))
+    # frame = torch.from_numpy(frame)
+    # frame = frame.to(device, dtype=torch.float32)
+    # frame = frame.unsqueeze(1)
+    
+    # return frame
 
 
 device = torch.device("cpu")
@@ -34,6 +40,8 @@ env_id = "PongNoFrameskip-v4"
 # env = wrap_deepmind(env, frame_stack=True)
 
 env = gym.make(env_id, render_mode="human")
+# env = gym.make(env_id)
+# env = gym.wrappers.AtariPreprocessing(env, frame_skip=4)
 env = gym.wrappers.AtariPreprocessing(env)
 
 seed_value = 23
@@ -47,6 +55,11 @@ gamma = 0.99
 
 hidden_layer = 512
 
+batch_size = 32
+experience_memory_size = 100000
+
+update_target_frequency = 2000
+
 report_interval = 20
 number_of_inputs = env.observation_space.shape[0]
 number_of_outputs = env.action_space.n
@@ -58,35 +71,15 @@ qnet_agent = ConcreteDQN(
     device,
     gamma,
     preprocess_state_func=preprocess_state,
-    egreedy=0.9,
+    egreedy=0.01,
     egreedy_final=0.01,
     egreedy_decay=10000,
     save_model_frequency=10000,
     resume_previous_training=True,
+    experience_memory_size=experience_memory_size,
+    batch_size=batch_size,
+    target_net=NeuralNetworkWithCNN(number_of_inputs, hidden_layer, number_of_outputs).to(device),
+    update_target_frequency=update_target_frequency
 )
 
-qnet_agent_with_memory = DQNWithMemory(
-    qnet_agent,
-    ExperienceReplay(100000),
-    32,
-)
-
-qnet_agent_with_targetnn = DQNWithTargetNet(
-    qnet_agent,
-    NeuralNetworkWithCNN(number_of_inputs, hidden_layer, number_of_outputs).to(device),
-    50000,
-)
-
-qnet_agent_with_memory_and_targetnn = DQNWithTargetNet(
-    qnet_agent_with_memory,
-    NeuralNetworkWithCNN(number_of_inputs, hidden_layer, number_of_outputs).to(device),
-    50000,
-)
-
-qnet_agent_with_memory_and_dueling = DQNWithTargetNet(
-    qnet_agent_with_memory,
-    NeuralNetworkWithCNN(number_of_inputs, hidden_layer, number_of_outputs).to(device),
-    50000,
-)
-
-qnet_agent_with_memory_and_targetnn.learn(num_episodes, seed_value, report_interval)
+qnet_agent.learn(num_episodes, seed_value, report_interval)

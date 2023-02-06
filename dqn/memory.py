@@ -3,6 +3,7 @@ import random
 
 class ExperienceReplay:
     def __init__(self, capacity) -> None:
+        assert capacity >= 1
         self.capacity = capacity
         self.memory = []
         self.position = 0
