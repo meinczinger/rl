@@ -86,3 +86,17 @@ class NeuralNetworkWithCNN(nn.Module):
         output_final = output_value + output_advantage - output_advantage.mean()
 
         return output_final
+
+class NNLunarLander(nn.Module):
+    def __init__(self, hidden_size, obs_size, n_actions):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, n_actions),
+        )
+
+    def forward(self, x):
+        return self.net(x.float())

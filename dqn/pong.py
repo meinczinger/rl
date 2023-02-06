@@ -1,6 +1,6 @@
 from dqn.dqn_base import ConcreteDQN
 from dqn.neural_net import NeuralNetworkWithCNN
-from dqn.memory import ExperienceReplay
+from dqn.replay_buffer import ReplayBuffer
 import gymnasium as gym
 import torch
 import random
