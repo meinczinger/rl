@@ -12,6 +12,7 @@ import gymnasium as gym
 import torch
 import random
 import statistics
+from enum import IntEnum
 
 import numpy as np
 import torch.nn.functional as F
@@ -32,6 +33,7 @@ from dqn.replay_buffer import ReplayBuffer, RLDataset
 from dqn.neural_net import NNLunarLander
 
 writer = SummaryWriter("runs/pong")
+
 
 class ConcreteDQN:
     def __init__(
@@ -69,9 +71,8 @@ class ConcreteDQN:
         self.save_model_frequency = save_model_frequency
         self.preprocess_state_func = preprocess_state_func
 
-
         if target_net is None:
-            self.target_net = neural_net            
+            self.target_net = neural_net
             self.use_target_net = False
         else:
             self.target_net = target_net
@@ -91,7 +92,6 @@ class ConcreteDQN:
         self.optimizer = torch.optim.Adam(
             params=self.neural_net.parameters(), lr=self.lr
         )
-
 
         self.number_of_steps = 0
 
@@ -116,12 +116,13 @@ class ConcreteDQN:
 
         return action
 
-
     def optimize(self):
         if len(self.experience_replay) < self.batch_size:
             return
 
-        state, action, new_state, reward, done = self.experience_replay.sample(self.batch_size)
+        state, action, new_state, reward, done = self.experience_replay.sample(
+            self.batch_size
+        )
 
         state = [self.preprocess_state(frame) for frame in state]
         state = torch.cat(state)
@@ -132,20 +133,24 @@ class ConcreteDQN:
         reward = torch.Tensor(reward).to(self.device)
         action = torch.LongTensor(action).to(self.device)
         done = torch.Tensor(done).to(self.device)
-        
+
         if self.double_dqn:
             new_state_values = self.neural_net(new_state).detach()
-            max_new_state_indexes = torch.max(new_state_values, 1)[1]  
-            
+            max_new_state_indexes = torch.max(new_state_values, 1)[1]
+
             new_state_values = self.target_net(new_state).detach()
-            max_new_state_values = new_state_values.gather(1, max_new_state_indexes.unsqueeze(1)).squeeze(1)            
+            max_new_state_values = new_state_values.gather(
+                1, max_new_state_indexes.unsqueeze(1)
+            ).squeeze(1)
         else:
             new_state_values = self.target_net(new_state).detach()
             max_new_state_values = torch.max(new_state_values)
-            
+
         target_value = reward + (1 - done) * self.gamma * max_new_state_values
 
-        predicted_value = self.neural_net(state).gather(1, action.unsqueeze(1)).squeeze(1)
+        predicted_value = (
+            self.neural_net(state).gather(1, action.unsqueeze(1)).squeeze(1)
+        )
 
         loss = self.loss_func(predicted_value, target_value)
 
@@ -155,7 +160,7 @@ class ConcreteDQN:
 
         if self.clip_error:
             for param in self.neural_net.parameters():
-                param.grad.data.clamp_(-1,1)
+                param.grad.data.clamp_(-1, 1)
 
         self.optimizer.step()
 
@@ -165,15 +170,15 @@ class ConcreteDQN:
         )
         return epsilon
 
-
     def after_optimize(self):
         if (self.number_of_steps > 0) and (
             self.number_of_steps % self.save_model_frequency == 0
         ):
             self.save_model(self.neural_net)
-        if self.use_target_net and ((self.number_of_steps % self.update_target_frequency) == 0):
+        if self.use_target_net and (
+            (self.number_of_steps % self.update_target_frequency) == 0
+        ):
             self.target_net.load_state_dict(self.neural_net.state_dict())
-
 
     def reset_env(self, seed_value):
         if seed_value == 0:
@@ -219,7 +224,9 @@ class ConcreteDQN:
 
                 score += reward
 
-                self.experience_replay.push(state, action, new_state, reward, 1 if done else 0)
+                self.experience_replay.push(
+                    state, action, new_state, reward, 1 if done else 0
+                )
 
                 self.optimize()
 
@@ -237,21 +244,26 @@ class ConcreteDQN:
                         metrics_callback is not None
                     ):
                         metrics_callback(rewards_total)
-                    
-                    writer.add_scalar('reward', score, i_episode)
-                    writer.add_scalar('epsilon', epsilon, i_episode)
-                    
+
+                    writer.add_scalar("reward", score, i_episode)
+                    writer.add_scalar("epsilon", epsilon, i_episode)
 
         return rewards_total
 
-class DeepQLearning(LightningModule):
+
+class AbstractDQN(LightningModule):
+    def __init__(self, *args: any, **kwargs: any) -> None:
+        super().__init__(*args, **kwargs)
+
+
+class DeepQLearning(AbstractDQN):
 
     # Initialize.
     def __init__(
         self,
         env: gym.Env,
         policy,
-        q_net = torch.nn,
+        q_net=torch.nn,
         capacity=100_000,
         batch_size=256,
         lr=1e-3,
@@ -376,7 +388,19 @@ class DeepQLearning(LightningModule):
         self.log("episode/Return", self.env.return_queue[-1][0])
 
         returns = list(self.env.return_queue)[-100:]
-        self.log('hp_metric', np.mean(returns))
+        self.log("hp_metric", np.mean(returns))
 
         if self.current_epoch % self.hparams.sync_rate == 0:
             self.target_q_net.load_state_dict(self.q_net.state_dict())
+
+
+class DQNType(IntEnum):
+    DQN = 0
+
+
+class DQNFactory:
+    @staticmethod
+    def get_dqn(algo_type: DQNType, **kwargs) -> AbstractDQN:
+        match (algo_type):
+            case DQNType.DQN:
+                return DeepQLearning(**kwargs)

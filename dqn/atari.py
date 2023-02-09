@@ -1,50 +1,25 @@
-
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import EarlyStopping
 from dqn.policy import PolicyEpsilongGreedy
-from dqn.dqn_base import DeepQLearning
+from dqn.dqn_base import DeepQLearning, DQNFactory, DQNType
 from dqn.neural_net import NNLunarLander
 from dqn.environment import DQNEnvironment
-import optuna
+from dqn.hp_tuner import HPTuner
+from ray import tune
 
 # Parameters
 device = "cpu"
 hidden_size = 128
 
 env = DQNEnvironment("LunarLander-v2")
+policy = PolicyEpsilongGreedy(device)
+q_net = NNLunarLander(hidden_size, env.observation_size(), env.number_of_actions())
 
-def objective(trial:optuna.trial):
-    lr = trial.suggest_float("lr", 1e-5, 1e-1, log=True)
-    gamma = trial.suggest_float("gamma", 0.0, 1.0)
 
-    algo = DeepQLearning(env=env.env, policy=PolicyEpsilongGreedy(device), q_net=NNLunarLander(hidden_size, env.observation_size(), env.number_of_actions()), lr=lr, gamma=gamma)    
+hp = HPTuner(
+    50,
+    1000,
+    config={"lr": tune.loguniform(1e-5, 1e-3), "gamma": tune.loguniform(0.6, 1.0)},
+)
+# hp.tune({"algo_type": DQNType.DQN, "env": env.env, "policy": policy, "q_net": q_net})
+best_hp = hp.tune(algo_type=DQNType.DQN, env=env.env, policy=policy, q_net=q_net)
 
-# algo = DeepQLearning(env=env.env, policy=PolicyEpsilongGreedy(device), q_net=NNLunarLander(hidden_size, env.observation_size(), env.number_of_actions()))
-
-    callback = optuna.integration.PyTorchLightningPruningCallback(trial, monitor='hp_metric')
-
-    match(device):
-        case 'cpu':
-            trainer = Trainer(
-                max_epochs=1_000,
-                callbacks=[callback],
-            )
-        case 'mps':
-            trainer = Trainer(
-                max_epochs=1_000,
-                callbacks=[callback],
-                accelerator="mps", devices=1
-            )
-
-    hyperparameters = dict(lr=lr, gamma=gamma)
-
-    trainer.logger.log_hyperparams(hyperparameters)
-    
-    trainer.fit(algo)
-
-    return trainer.callback_metrics['hp_metric'].item()
-
-pruner = optuna.pruners.SuccessiveHalvingPruner()
-study = optuna.create_study(direction="maximize", pruner=pruner)
-
-study.optimize(objective, n_trials=20)
+print("Best hyperparameters found were: ", best_hp)
