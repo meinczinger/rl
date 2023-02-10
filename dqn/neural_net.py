@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 
 
 class NeuralNetwork(nn.Module):
@@ -48,8 +49,9 @@ class NeuralNetworkForDueling(nn.Module):
 
 
 class NeuralNetworkWithCNN(nn.Module):
-    def __init__(self, number_of_inputs, hidden_layer, number_of_outputs):
-        super(NeuralNetworkWithCNN, self).__init__()
+    def __init__(self, hidden_layer, number_of_inputs, number_of_outputs):
+        super().__init__()
+        # super(NeuralNetworkWithCNN, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
@@ -66,6 +68,7 @@ class NeuralNetworkWithCNN(nn.Module):
     def forward(self, x):
         x = x / 255
 
+        # print("Input", x.shape)
         output_conv = self.conv1(x)
         output_conv = self.activation(output_conv)
         output_conv = self.conv2(output_conv)
@@ -73,7 +76,9 @@ class NeuralNetworkWithCNN(nn.Module):
         output_conv = self.conv3(output_conv)
         output_conv = self.activation(output_conv)
 
+        # print("Before", output_conv.shape)
         output_conv = output_conv.view(output_conv.size(0), -1)
+        # print("After", output_conv.shape)
 
         output_advantage = self.advantage1(output_conv)
         output_advantage = self.activation(output_advantage)
@@ -86,6 +91,7 @@ class NeuralNetworkWithCNN(nn.Module):
         output_final = output_value + output_advantage - output_advantage.mean()
 
         return output_final
+
 
 class NNLunarLander(nn.Module):
     def __init__(self, hidden_size, obs_size, n_actions):
@@ -100,3 +106,24 @@ class NNLunarLander(nn.Module):
 
     def forward(self, x):
         return self.net(x.float())
+
+
+class NNLunarLanderDueling(nn.Module):
+    def __init__(self, hidden_size, obs_size, n_actions) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+        )
+
+        # Q(s, a) = V(s) + Adv(s, a)
+        self.fc_value = nn.Linear(hidden_size, 1)
+        self.fc_adv = nn.Linear(hidden_size, n_actions)
+
+    def forward(self, x):
+        x = self.net(x.float())
+        adv = self.fc_adv(x)
+        value = self.fc_value(x)
+        return value + adv - torch.mean(adv, dim=1, keepdim=True)

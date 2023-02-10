@@ -31,6 +31,8 @@ from gymnasium.wrappers import RecordVideo, RecordEpisodeStatistics, TimeLimit
 
 from dqn.replay_buffer import ReplayBuffer, RLDataset
 from dqn.neural_net import NNLunarLander
+from dqn.epsilon import Epsilon
+
 
 writer = SummaryWriter("runs/pong")
 
@@ -267,22 +269,17 @@ class DeepQLearning(AbstractDQN):
         capacity=100_000,
         batch_size=256,
         lr=1e-3,
-        hidden_size=128,
         gamma=0.99,
         loss_fn=F.smooth_l1_loss,
         optim=AdamW,
-        eps_start=1.0,
-        eps_end=0.15,
-        eps_last_episode=100,
+        epsilon: Epsilon = Epsilon(eps_start=1.0, eps_end=0.15, eps_last_episode=100),
         samples_per_epoch=1000,
         sync_rate=10,
+        double_dqn: bool = True,
     ):
 
         super().__init__()
         self.env = env
-
-        obs_size = self.env.observation_space.shape[0]
-        n_actions = self.env.action_space.n
 
         self.q_net = q_net
 
@@ -291,11 +288,13 @@ class DeepQLearning(AbstractDQN):
         self.policy = policy
         self.buffer = ReplayBuffer(capacity=capacity)
 
+        self.epsilon = epsilon
+
         self.save_hyperparameters()
 
         while len(self.buffer) < self.hparams.samples_per_epoch:
             # print(f"{len(self.buffer)} samples in experience buffer. Filling...")
-            self.play_episode(epsilon=self.hparams.eps_start)
+            self.play_episode(epsilon=self.epsilon.eps_start)
 
     @torch.no_grad()
     def play_episode(self, policy=None, epsilon=0.0):
@@ -305,6 +304,7 @@ class DeepQLearning(AbstractDQN):
 
         while not done:
             if policy:
+                # print("Getting best action")
                 action = policy.get_action(state, self.env, self.q_net, epsilon=epsilon)
             else:
                 action = self.env.action_space.sample()
@@ -361,14 +361,29 @@ class DeepQLearning(AbstractDQN):
     def training_step(self, batch, batch_idx):
         # print("training_step")
         states, actions, rewards, dones, next_states = batch
+        if states.shape[0] < self.hparams.batch_size:
+            return
+
         actions = actions.unsqueeze(1)
         rewards = rewards.unsqueeze(1)
         dones = dones.unsqueeze(1)
+        states = states.unsqueeze(1)
+        next_states = next_states.unsqueeze(1)
 
         state_action_values = self.q_net(states).gather(1, actions)
 
-        next_action_values, _ = self.target_q_net(next_states).max(dim=1, keepdim=True)
-        next_action_values[dones] = 0.0
+        if not self.hparams.double_dqn:
+            next_action_values, _ = self.target_q_net(next_states).max(
+                dim=1, keepdim=True
+            )
+            next_action_values[dones] = 0.0
+        else:
+            with torch.no_grad():
+                _, next_actions = self.q_net(next_states).max(dim=1, keepdim=True)
+                next_action_values = self.target_q_net(next_states).gather(
+                    1, next_actions
+                )
+                next_action_values[dones] = 0.0
 
         expected_state_action_values = rewards + self.hparams.gamma * next_action_values
 
@@ -379,10 +394,11 @@ class DeepQLearning(AbstractDQN):
     # Training epoch end.
     def training_epoch_end(self, training_step_outputs):
         # print("epoch end")
-        epsilon = max(
-            self.hparams.eps_end,
-            self.hparams.eps_start - self.current_epoch / self.hparams.eps_last_episode,
-        )
+        # epsilon = max(
+        #     self.hparams.eps_end,
+        #     self.hparams.eps_start - self.current_epoch / self.hparams.eps_last_episode,
+        # )
+        epsilon = self.epsilon.calculate_epsilon(self.current_epoch)
 
         self.play_episode(policy=self.policy, epsilon=epsilon)
         self.log("episode/Return", self.env.return_queue[-1][0])

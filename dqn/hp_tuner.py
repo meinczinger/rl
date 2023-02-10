@@ -37,7 +37,7 @@ class HPTuner:
     def tune(self, **kwargs):
 
         scheduler = ASHAScheduler(
-            max_t=self.nr_of_epochs, grace_period=10, reduction_factor=2
+            max_t=self.nr_of_epochs, grace_period=50, reduction_factor=2
         )
 
         reporter = CLIReporter(
