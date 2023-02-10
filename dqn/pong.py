@@ -23,7 +23,7 @@ def preprocess_state(state, device):
     state = torch.from_numpy(state)
     state = state.to(device, dtype=torch.float32)
     state = state.unsqueeze(1)
-    # state = state.transpose((2, 0, 1))
+    # state = state.transpose((2, 0, 1))pip install autorom
     return state
     # frame = np.expand_dims(frame, axis=0)
     # frame = frame.transpose((2,0,1))
@@ -42,8 +42,8 @@ env_id = "PongNoFrameskip-v4"
 # env = make_atari(env_id)
 # env = wrap_deepmind(env, frame_stack=True)
 
-env = gym.make(env_id, render_mode="human")
-# env = gym.make(env_id)
+# env = gym.make(env_id, render_mode="human")
+env = gym.make(env_id)
 # env = gym.wrappers.AtariPreprocessing(env, frame_skip=4)
 env = gym.wrappers.AtariPreprocessing(env)
 
@@ -94,7 +94,7 @@ env = DQNEnvironment("PongNoFrameskip-v4", atari_game=True)
 dqn = DeepQLearning(
     env.env,
     policy=PolicyEpsilongGreedy(device),
-    q_net=NeuralNetworkWithCNN(hidden_layer, number_of_inputs, number_of_outputs),
+    q_net=NeuralNetworkWithCNN(hidden_layer, number_of_inputs, number_of_outputs), lr=0.0001, batch_size=32, sync_rate=50,
 )
 
 # env = DQNEnvironment("LunarLander-v2")

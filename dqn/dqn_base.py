@@ -361,8 +361,8 @@ class DeepQLearning(AbstractDQN):
     def training_step(self, batch, batch_idx):
         # print("training_step")
         states, actions, rewards, dones, next_states = batch
-        if states.shape[0] < self.hparams.batch_size:
-            return
+        # if states.shape[0] < self.hparams.batch_size:
+        #     return 0
 
         actions = actions.unsqueeze(1)
         rewards = rewards.unsqueeze(1)
@@ -417,6 +417,5 @@ class DQNType(IntEnum):
 class DQNFactory:
     @staticmethod
     def get_dqn(algo_type: DQNType, **kwargs) -> AbstractDQN:
-        match (algo_type):
-            case DQNType.DQN:
-                return DeepQLearning(**kwargs)
+        if algo_type == DQNType.DQN:
+            return DeepQLearning(**kwargs)

@@ -17,6 +17,14 @@ class ReplayBuffer:
     def sample(self, batch_size):
         return random.sample(self.buffer, batch_size)
 
+class PriorityReplayBuffer(ReplayBuffer):
+    def __init__(self, capacity):
+        super().__init__(capacity)
+        self.priorities = deque(maxlen=capacity)
+        self.capacity = capacity
+        self.alpha = 1.0
+        self.beta = 0.5
+        
 
 class RLDataset(IterableDataset):
     def __init__(self, buffer, sample_size=400):
