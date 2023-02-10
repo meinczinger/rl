@@ -64,7 +64,7 @@ class NeuralNetworkWithCNN(nn.Module):
 
         conv_out_size = self._get_conv_out(obs_shape)
 
-        self.head - nn.Sequential(
+        self.head = nn.Sequential(
             nn.Linear(conv_out_size, hidden_layer),
             nn.ReLU(),
             nn.Linear(hidden_layer, hidden_layer),
@@ -84,7 +84,7 @@ class NeuralNetworkWithCNN(nn.Module):
         x = self.head(x)
         adv = self.fc_advantage(x)
         value = self.fc_value(x)
-        return value + adv - np.mean(adv, dim=1, keepdims=True)
+        return value + adv - torch.mean(adv, dim=1, keepdim=True)
 
 
 class NNLunarLander(nn.Module):

@@ -22,7 +22,7 @@ class PolicyEpsilongGreedy(AbstractPolicy):
             action = env.action_space.sample()
         else:
             state = torch.tensor(np.array([state]), device=torch.device(self.device))
-            state = state.unsqueeze(1)
+            # state = state.unsqueeze(1)
             q_values = net(state)
             _, action = torch.max(q_values, dim=1)
             action = int(action.item())

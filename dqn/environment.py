@@ -1,6 +1,6 @@
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo, RecordEpisodeStatistics, TimeLimit
-import abc
+import numpy as np
 
 
 class DQNEnvironment:
@@ -12,6 +12,11 @@ class DQNEnvironment:
         self.env = RecordEpisodeStatistics(self.env)
         if atari_game:
             self.env = gym.wrappers.AtariPreprocessing(self.env)
+            self.env = gym.wrappers.TransformObservation(self.env, lambda x: x.swapaxes(-1, 0))
+            self.env.observation_space = gym.spaces.Box(low=0, high=255, shape=(1, 84, 84), dtype=np.float32)
+            # senv = NormalizeObservation(env)
+            # env = NormalizeReward(env)
+        
 
     def observation_size(self):
         return self.env.observation_space.shape[0]

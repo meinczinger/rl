@@ -5,7 +5,7 @@ import math
 import os
 from torch.utils.tensorboard import SummaryWriter
 from dqn.neural_net import NeuralNetwork
-from dqn.replay_buffer import ReplayBuffer
+from dqn.replay_buffer import ReplayBuffer, PriorityReplayBuffer
 
 import copy
 import gymnasium as gym
@@ -31,7 +31,7 @@ from gymnasium.wrappers import RecordVideo, RecordEpisodeStatistics, TimeLimit
 
 from dqn.replay_buffer import ReplayBuffer, RLDataset
 from dqn.neural_net import NNLunarLander
-from dqn.epsilon import Epsilon
+from dqn.tempreture import Tempreture
 
 
 writer = SummaryWriter("runs/pong")
@@ -267,15 +267,18 @@ class DeepQLearning(AbstractDQN):
         policy,
         q_net=torch.nn,
         capacity=100_000,
+        priority_buffer:bool = False,
         batch_size=256,
         lr=1e-3,
         gamma=0.99,
         loss_fn=F.smooth_l1_loss,
         optim=AdamW,
-        epsilon: Epsilon = Epsilon(eps_start=1.0, eps_end=0.15, eps_last_episode=100),
+        epsilon: Tempreture = Tempreture(start=1.0, end=0.15, last_episode=100),
         samples_per_epoch=1000,
         sync_rate=10,
         double_dqn: bool = True,
+        alpha: Tempreture = Tempreture(start=0.5, end=0.0, last_episode=100),
+        beta: Tempreture = Tempreture(start=0.4, end=1.0, last_episode=100),
     ):
 
         super().__init__()
@@ -286,15 +289,20 @@ class DeepQLearning(AbstractDQN):
         self.target_q_net = copy.deepcopy(self.q_net)
 
         self.policy = policy
-        self.buffer = ReplayBuffer(capacity=capacity)
+        if priority_buffer:
+            self.buffer = PriorityReplayBuffer(capacity=capacity)
+        else:
+            self.buffer = ReplayBuffer(capacity=capacity)
 
         self.epsilon = epsilon
+        self.alpha = alpha
+        self.beta = beta
 
         self.save_hyperparameters()
 
         while len(self.buffer) < self.hparams.samples_per_epoch:
             # print(f"{len(self.buffer)} samples in experience buffer. Filling...")
-            self.play_episode(epsilon=self.epsilon.eps_start)
+            self.play_episode(epsilon=self.epsilon.start)
 
     @torch.no_grad()
     def play_episode(self, policy=None, epsilon=0.0):
@@ -360,7 +368,11 @@ class DeepQLearning(AbstractDQN):
     # Training step.
     def training_step(self, batch, batch_idx):
         # print("training_step")
-        states, actions, rewards, dones, next_states = batch
+        if not self.hparams.priority_buffer:
+            states, actions, rewards, dones, next_states = batch
+        else:
+            indicies, weights, states, actions, rewards, dones, next_states = batch
+            weights = weights.unsqueeze(1)
         # if states.shape[0] < self.hparams.batch_size:
         #     return 0
 
@@ -387,7 +399,17 @@ class DeepQLearning(AbstractDQN):
 
         expected_state_action_values = rewards + self.hparams.gamma * next_action_values
 
-        loss = self.hparams.loss_fn(state_action_values, expected_state_action_values)
+        if self.hparams.priority_buffer:
+            td_errors = (state_action_values - expected_state_action_values).abs().detach()
+
+            for idx, error in zip(indicies, td_errors):
+                self.buffer.update(idx, error)
+            
+            loss = weights * self.hparams.loss_fn(state_action_values, expected_state_action_values, reduction='none')    
+            loss = loss.mean()
+        else:
+            loss = self.hparams.loss_fn(state_action_values, expected_state_action_values)
+    
         self.log("episode/Q-Error", loss)
         return loss
 
@@ -398,7 +420,13 @@ class DeepQLearning(AbstractDQN):
         #     self.hparams.eps_end,
         #     self.hparams.eps_start - self.current_epoch / self.hparams.eps_last_episode,
         # )
-        epsilon = self.epsilon.calculate_epsilon(self.current_epoch)
+        epsilon = self.epsilon.calculate_tempreture(self.current_epoch)
+        
+        if self.hparams.priority_buffer:
+            alpha = self.alpha.calculate_tempreture(self.current_epoch)
+            beta = self.beta.calculate_tempreture(self.current_epoch, False)
+            self.buffer.alpha = alpha
+            self.buffer.beta = beta
 
         self.play_episode(policy=self.policy, epsilon=epsilon)
         self.log("episode/Return", self.env.return_queue[-1][0])

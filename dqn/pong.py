@@ -64,7 +64,7 @@ experience_memory_size = 100000
 update_target_frequency = 2000
 
 report_interval = 20
-number_of_inputs = env.observation_space.shape[0]
+obs_shape = env.observation_space.shape
 number_of_outputs = env.action_space.n
 
 # qnet_agent = ConcreteDQN(
@@ -91,10 +91,12 @@ number_of_outputs = env.action_space.n
 
 env = DQNEnvironment("PongNoFrameskip-v4", atari_game=True)
 
+obs_shape = env.env.observation_space.shape
+
 dqn = DeepQLearning(
     env.env,
     policy=PolicyEpsilongGreedy(device),
-    q_net=NeuralNetworkWithCNN(hidden_layer, number_of_inputs, number_of_outputs), lr=0.0001, batch_size=32, sync_rate=50,
+    q_net=NeuralNetworkWithCNN(hidden_layer, obs_shape, number_of_outputs), lr=0.0001, batch_size=32, sync_rate=50, priority_buffer=True
 )
 
 # env = DQNEnvironment("LunarLander-v2")
