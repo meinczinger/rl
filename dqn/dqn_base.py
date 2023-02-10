@@ -371,7 +371,7 @@ class DeepQLearning(AbstractDQN):
         if not self.hparams.priority_buffer:
             states, actions, rewards, dones, next_states = batch
         else:
-            indicies, weights, states, actions, rewards, dones, next_states = batch
+            indices, weights, states, actions, rewards, dones, next_states = batch
             weights = weights.unsqueeze(1)
         # if states.shape[0] < self.hparams.batch_size:
         #     return 0
@@ -402,11 +402,12 @@ class DeepQLearning(AbstractDQN):
         if self.hparams.priority_buffer:
             td_errors = (state_action_values - expected_state_action_values).abs().detach()
 
-            for idx, error in zip(indicies, td_errors):
-                self.buffer.update(idx, error)
-            
-            loss = weights * self.hparams.loss_fn(state_action_values, expected_state_action_values, reduction='none')    
+            for idx, e in zip(indices, td_errors):
+                self.buffer.update(idx, e.cpu().item())
+
+            loss = weights * self.hparams.loss_fn(state_action_values, expected_state_action_values, reduction='none')
             loss = loss.mean()
+    
         else:
             loss = self.hparams.loss_fn(state_action_values, expected_state_action_values)
     

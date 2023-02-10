@@ -40,11 +40,11 @@ class PriorityReplayBuffer(ReplayBuffer):
         prios = np.array(self.priorities, dtype=np.float64) + 1e-4
         prios = prios ** self.alpha
         probs = prios / prios.sum()
-        
+
         weights = (self.__len__() * probs) ** -self.beta
         weights = weights / weights.max()
 
-        idx = random.choice(range(self.__len__()), weights=probs, k=batch_size)
+        idx = random.choices(range(self.__len__()), weights=probs, k=batch_size)
         sample = [(i, weights[i], *self.buffer[i]) for i in idx]
         return sample
 
