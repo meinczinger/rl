@@ -56,16 +56,7 @@ learning_rate = 0.0001
 num_episodes = 500
 gamma = 0.99
 
-hidden_layer = 512
 
-batch_size = 32
-experience_memory_size = 100000
-
-update_target_frequency = 2000
-
-report_interval = 20
-obs_shape = env.observation_space.shape
-number_of_outputs = env.action_space.n
 
 # qnet_agent = ConcreteDQN(
 #     env,
@@ -92,11 +83,14 @@ number_of_outputs = env.action_space.n
 env = DQNEnvironment("PongNoFrameskip-v4", atari_game=True)
 
 obs_shape = env.env.observation_space.shape
+number_of_outputs = env.env.action_space.n
+hidden_layer = 512
+
 
 dqn = DeepQLearning(
     env.env,
     policy=PolicyEpsilongGreedy(device),
-    q_net=NeuralNetworkWithCNN(hidden_layer, obs_shape, number_of_outputs), lr=0.0001, batch_size=32, sync_rate=50, priority_buffer=True
+    q_net=NeuralNetworkWithCNN(hidden_layer, obs_shape, number_of_outputs), lr=0.0001, batch_size=32, sync_rate=50, priority_buffer=False
 )
 
 # env = DQNEnvironment("LunarLander-v2")
@@ -116,14 +110,14 @@ match (device):
         trainer = Trainer(
             max_epochs=10_000,
             callbacks=[
-                EarlyStopping(monitor="episode/Return", mode="max", patience=500)
+                EarlyStopping(monitor="episode/Return", mode="max", patience=1000)
             ],
         )
     case "mps":
         trainer = Trainer(
             max_epochs=10_000,
             callbacks=[
-                EarlyStopping(monitor="episode/Return", mode="max", patience=500)
+                EarlyStopping(monitor="episode/Return", mode="max", patience=1000)
             ],
             accelerator="mps",
             devices=1,

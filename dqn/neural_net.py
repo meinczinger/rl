@@ -54,12 +54,15 @@ class NeuralNetworkWithCNN(nn.Module):
         # super(NeuralNetworkWithCNN, self).__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=obs_shape[0], out_channels=64, kernel_size=3),
-            nn.MaxPool2d(kernel_size=4),
-            nn.ReLU(),
-            nn.Conv2d(64, out_channels=64, kernel_size=3),
-            nn.MaxPool2d(kernel_size=4),
-            nn.ReLU(),
+            nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
+            # nn.MaxPool2d(kernel_size=5),
+            # nn.ReLU(),
+            nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
+            # nn.MaxPool2d(kernel_size=4),
+            # nn.ReLU(),
+            nn.Conv2d(64, out_channels=64, kernel_size=3, stride=1),
+            # nn.MaxPool2d(kernel_size=4),
+            # nn.ReLU(),
         )
 
         conv_out_size = self._get_conv_out(obs_shape)
@@ -79,7 +82,7 @@ class NeuralNetworkWithCNN(nn.Module):
         return int(np.prod(conv_out.size()))
 
     def forward(self, x):
-        # x = x / 255
+        x = x / 255
         x = self.conv(x.float()).view(x.size()[0], -1) # (batch_size, num_features)
         x = self.head(x)
         adv = self.fc_advantage(x)
