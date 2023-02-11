@@ -1,4 +1,4 @@
-class Tempreture:
+class Temprature:
     def __init__(
         self,
         start=1.0,

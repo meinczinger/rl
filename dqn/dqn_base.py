@@ -31,7 +31,7 @@ from gymnasium.wrappers import RecordVideo, RecordEpisodeStatistics, TimeLimit
 
 from dqn.replay_buffer import ReplayBuffer, RLDataset
 from dqn.neural_net import NNLunarLander
-from dqn.tempreture import Tempreture
+from dqn.temprature import Temprature
 
 
 writer = SummaryWriter("runs/pong")
@@ -273,12 +273,12 @@ class DeepQLearning(AbstractDQN):
         gamma=0.99,
         loss_fn=F.smooth_l1_loss,
         optim=AdamW,
-        epsilon: Tempreture = Tempreture(start=1.0, end=0.15, last_episode=100),
+        epsilon: Temprature = Temprature(start=1.0, end=0.15, last_episode=100),
         samples_per_epoch=1000,
         sync_rate=10,
         double_dqn: bool = True,
-        alpha: Tempreture = Tempreture(start=0.5, end=0.0, last_episode=100),
-        beta: Tempreture = Tempreture(start=0.4, end=1.0, last_episode=100),
+        alpha: Temprature = Temprature(start=0.5, end=0.0, last_episode=100),
+        beta: Temprature = Temprature(start=0.4, end=1.0, last_episode=100),
     ):
 
         super().__init__()
@@ -403,7 +403,7 @@ class DeepQLearning(AbstractDQN):
             td_errors = (state_action_values - expected_state_action_values).abs().detach()
 
             for idx, e in zip(indices, td_errors):
-                self.buffer.update(idx, e.cpu().item())
+                self.buffer.update(idx, e.item())
 
             loss = weights * self.hparams.loss_fn(state_action_values, expected_state_action_values, reduction='none')
             loss = loss.mean()

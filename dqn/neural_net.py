@@ -50,6 +50,38 @@ class NeuralNetworkForDueling(nn.Module):
 
 class NeuralNetworkWithCNN(nn.Module):
     def __init__(self, hidden_layer, obs_shape, n_actions):
+        super(NeuralNetworkWithCNN, self).__init__()
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, out_channels=64, kernel_size=3, stride=1),
+            nn.ReLU(),
+        )
+
+        conv_out_size = self._get_conv_out(obs_shape)
+
+        self.fc = nn.Sequential(
+            nn.Linear(conv_out_size, hidden_layer),
+            nn.ReLU(),
+            nn.Linear(hidden_layer, n_actions),
+        )
+
+
+    def _get_conv_out(self, shape):
+        conv_out = self.conv(torch.Tensor(1, *shape))
+        return int(np.prod(conv_out.size()))
+
+    def forward(self, x):
+        # x = x / 255
+        x = self.conv(x.float()).view(x.size()[0], -1) # (batch_size, num_features)
+        return self.fc(x)
+
+
+class NeuralNetworkWithCNNDueling(nn.Module):
+    def __init__(self, hidden_layer, obs_shape, n_actions):
         super().__init__()
         # super(NeuralNetworkWithCNN, self).__init__()
 
