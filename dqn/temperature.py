@@ -1,4 +1,4 @@
-class Temprature:
+class Temperature:
     def __init__(
         self,
         start=1.0,
@@ -9,7 +9,7 @@ class Temprature:
         self.end = end
         self.last_episode = last_episode
 
-    def calculate_tempreture(self, current_epoch: int, decrease:bool = True):
+    def calculate_temperature(self, current_epoch: int, decrease:bool = True):
         if decrease:
             return max(
                 self.end,

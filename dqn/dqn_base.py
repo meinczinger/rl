@@ -4,6 +4,7 @@ import abc
 import math
 import os
 from torch.utils.tensorboard import SummaryWriter
+from pytorch_lightning.loggers import TensorBoardLogger
 from dqn.neural_net import NeuralNetwork
 from dqn.replay_buffer import ReplayBuffer, PriorityReplayBuffer
 
@@ -31,8 +32,9 @@ from gymnasium.wrappers import RecordVideo, RecordEpisodeStatistics, TimeLimit
 
 from dqn.replay_buffer import ReplayBuffer, RLDataset
 from dqn.neural_net import NNLunarLander
-from dqn.temprature import Temprature
+from dqn.temperature import Temperature
 
+import time
 
 writer = SummaryWriter("runs/pong")
 
@@ -273,12 +275,12 @@ class DeepQLearning(AbstractDQN):
         gamma=0.99,
         loss_fn=F.smooth_l1_loss,
         optim=AdamW,
-        epsilon: Temprature = Temprature(start=1.0, end=0.15, last_episode=100),
+        epsilon: Temperature = Temperature(start=1.0, end=0.15, last_episode=100),
         samples_per_epoch=1000,
         sync_rate=10,
         double_dqn: bool = True,
-        alpha: Temprature = Temprature(start=0.5, end=0.0, last_episode=100),
-        beta: Temprature = Temprature(start=0.4, end=1.0, last_episode=100),
+        alpha: Temperature = Temperature(start=0.5, end=0.0, last_episode=100),
+        beta: Temperature = Temperature(start=0.4, end=1.0, last_episode=100),
     ):
 
         super().__init__()
@@ -298,6 +300,14 @@ class DeepQLearning(AbstractDQN):
         self.alpha = alpha
         self.beta = beta
 
+        self.steps = []
+        
+        self.start_time = time.time()
+
+        self.frames = 0
+
+        # self.logger = TensorBoardLogger('lightning_logs')
+
         self.save_hyperparameters()
 
         while len(self.buffer) < self.hparams.samples_per_epoch:
@@ -310,6 +320,7 @@ class DeepQLearning(AbstractDQN):
         state, _ = self.env.reset()
         done = False
 
+        step = 0
         while not done:
             if policy:
                 # print("Getting best action")
@@ -319,6 +330,10 @@ class DeepQLearning(AbstractDQN):
 
             # print("Taking action", action)
             next_state, reward, done, truncated, info = self.env.step(action)
+
+            step += 1
+
+            self.frames += 1
 
             done = done or truncated
             # print("After step", next_state)
@@ -338,6 +353,8 @@ class DeepQLearning(AbstractDQN):
             )
             self.buffer.append(exp)
             state = next_state
+
+        self.steps.append(step)
 
     # Forward.
     def forward(self, x):
@@ -414,6 +431,7 @@ class DeepQLearning(AbstractDQN):
         self.log("episode/Q-Error", loss)
         return loss
 
+
     # Training epoch end.
     def training_epoch_end(self, training_step_outputs):
         # print("epoch end")
@@ -421,11 +439,12 @@ class DeepQLearning(AbstractDQN):
         #     self.hparams.eps_end,
         #     self.hparams.eps_start - self.current_epoch / self.hparams.eps_last_episode,
         # )
-        epsilon = self.epsilon.calculate_tempreture(self.current_epoch)
+
+        epsilon = self.epsilon.calculate_temperature(self.current_epoch)
         
         if self.hparams.priority_buffer:
-            alpha = self.alpha.calculate_tempreture(self.current_epoch)
-            beta = self.beta.calculate_tempreture(self.current_epoch, False)
+            alpha = self.alpha.calculate_temperature(self.current_epoch)
+            beta = self.beta.calculate_temperature(self.current_epoch, False)
             self.buffer.alpha = alpha
             self.buffer.beta = beta
 
@@ -433,7 +452,12 @@ class DeepQLearning(AbstractDQN):
         self.log("episode/Return", self.env.return_queue[-1][0])
 
         returns = list(self.env.return_queue)[-100:]
-        self.log("hp_metric", np.mean(returns))
+        self.log("episode/avg_return", np.mean(returns))
+
+        steps_per_episode = self.steps[-100:]
+        self.log("episode/episode_steps", np.mean(steps_per_episode, dtype=np.float32))
+
+        self.logger.experiment.add_scalar("episode/frames_per_sec", self.frames / (time.time() - self.start_time), (time.time() - self.start_time) / 60.0)
 
         if self.current_epoch % self.hparams.sync_rate == 0:
             self.target_q_net.load_state_dict(self.q_net.state_dict())

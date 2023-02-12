@@ -27,7 +27,7 @@ class HPTuner:
             enable_progress_bar=False,
             callbacks=[
                 TuneReportCallback(
-                    {"hp_metric": "hp_metric"},
+                    {"episode/avg_return": "episode/avg_return"},
                     on="train_epoch_end",
                 )
             ],
@@ -42,7 +42,7 @@ class HPTuner:
 
         reporter = CLIReporter(
             parameter_columns=["lr", "gamma"],
-            metric_columns=["hp_metric"],
+            metric_columns=["episode/avg_return"],
         )
 
         train_fn_with_parameters = tune.with_parameters(
@@ -56,7 +56,7 @@ class HPTuner:
                 train_fn_with_parameters, resources=resources_per_trial
             ),
             tune_config=tune.TuneConfig(
-                metric="hp_metric",
+                metric="episode/avg_return",
                 mode="max",
                 scheduler=scheduler,
                 num_samples=self.nr_of_studies,
