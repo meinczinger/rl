@@ -45,7 +45,7 @@ class PriorityReplayBuffer(ReplayBuffer):
         weights = weights / weights.max()
 
         idx = random.choices(range(self.__len__()), weights=probs, k=batch_size)
-        sample = [(i, weights[i], *self.buffer[i]) for i in idx]
+        sample = [(i, np.float32(weights[i]), *self.buffer[i]) for i in idx]
         return sample
 
 class RLDataset(IterableDataset):

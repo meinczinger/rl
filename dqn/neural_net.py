@@ -87,22 +87,17 @@ class NeuralNetworkWithCNNDueling(nn.Module):
 
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
-            # nn.MaxPool2d(kernel_size=5),
-            # nn.ReLU(),
+            nn.ReLU(),
             nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
-            # nn.MaxPool2d(kernel_size=4),
-            # nn.ReLU(),
+            nn.ReLU(),
             nn.Conv2d(64, out_channels=64, kernel_size=3, stride=1),
-            # nn.MaxPool2d(kernel_size=4),
-            # nn.ReLU(),
+            nn.ReLU(),
         )
 
         conv_out_size = self._get_conv_out(obs_shape)
 
         self.head = nn.Sequential(
             nn.Linear(conv_out_size, hidden_layer),
-            nn.ReLU(),
-            nn.Linear(hidden_layer, hidden_layer),
             nn.ReLU(),
         )
 
