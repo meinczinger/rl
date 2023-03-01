@@ -1,6 +1,7 @@
 from torch import nn
 import torch
-import numpy as npimport torch.nn.functional as F
+import numpy as np
+import torch.nn.functional as F
 import math
 from torch.nn.init import kaiming_uniform_, zeros_
 
@@ -56,7 +57,9 @@ class NeuralNetworkWithCNN(nn.Module):
         super(NeuralNetworkWithCNN, self).__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
+            nn.Conv2d(
+                in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4
+            ),
             nn.ReLU(),
             nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
             nn.ReLU(),
@@ -72,14 +75,13 @@ class NeuralNetworkWithCNN(nn.Module):
             nn.Linear(hidden_layer, n_actions),
         )
 
-
     def _get_conv_out(self, shape):
         conv_out = self.conv(torch.Tensor(1, *shape))
         return int(np.prod(conv_out.size()))
 
     def forward(self, x):
         # x = x / 255
-        x = self.conv(x.float()).view(x.size()[0], -1) # (batch_size, num_features)
+        x = self.conv(x.float()).view(x.size()[0], -1)  # (batch_size, num_features)
         return self.fc(x)
 
 
@@ -89,7 +91,9 @@ class NeuralNetworkWithCNNDueling(nn.Module):
         # super(NeuralNetworkWithCNN, self).__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
+            nn.Conv2d(
+                in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4
+            ),
             nn.ReLU(),
             nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
             nn.ReLU(),
@@ -113,7 +117,7 @@ class NeuralNetworkWithCNNDueling(nn.Module):
 
     def forward(self, x):
         x = x / 255
-        x = self.conv(x.float()).view(x.size()[0], -1) # (batch_size, num_features)
+        x = self.conv(x.float()).view(x.size()[0], -1)  # (batch_size, num_features)
         x = self.head(x)
         adv = self.fc_advantage(x)
         value = self.fc_value(x)
