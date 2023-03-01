@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-import torch.nn.functional as F
+import numpy as npimport torch.nn.functional as F
 import math
 from torch.nn.init import kaiming_uniform_, zeros_
 
@@ -52,48 +52,72 @@ class NeuralNetworkForDueling(nn.Module):
 
 
 class NeuralNetworkWithCNN(nn.Module):
-    def __init__(self, hidden_layer, number_of_inputs, number_of_outputs):
+    def __init__(self, hidden_layer, obs_shape, n_actions):
+        super(NeuralNetworkWithCNN, self).__init__()
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, out_channels=64, kernel_size=3, stride=1),
+            nn.ReLU(),
+        )
+
+        conv_out_size = self._get_conv_out(obs_shape)
+
+        self.fc = nn.Sequential(
+            nn.Linear(conv_out_size, hidden_layer),
+            nn.ReLU(),
+            nn.Linear(hidden_layer, n_actions),
+        )
+
+
+    def _get_conv_out(self, shape):
+        conv_out = self.conv(torch.Tensor(1, *shape))
+        return int(np.prod(conv_out.size()))
+
+    def forward(self, x):
+        # x = x / 255
+        x = self.conv(x.float()).view(x.size()[0], -1) # (batch_size, num_features)
+        return self.fc(x)
+
+
+class NeuralNetworkWithCNNDueling(nn.Module):
+    def __init__(self, hidden_layer, obs_shape, n_actions):
         super().__init__()
         # super(NeuralNetworkWithCNN, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1)
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels=obs_shape[0], out_channels=32, kernel_size=8, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(32, out_channels=64, kernel_size=4, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(64, out_channels=64, kernel_size=3, stride=1),
+            nn.ReLU(),
+        )
 
-        self.advantage1 = nn.Linear(7 * 7 * 64, hidden_layer)
-        self.advantage2 = nn.Linear(hidden_layer, number_of_outputs)
+        conv_out_size = self._get_conv_out(obs_shape)
 
-        self.value1 = nn.Linear(7 * 7 * 64, hidden_layer)
-        self.value2 = nn.Linear(hidden_layer, 1)
+        self.head = nn.Sequential(
+            nn.Linear(conv_out_size, hidden_layer),
+            nn.ReLU(),
+        )
 
-        self.activation = nn.ReLU()
+        self.fc_advantage = nn.Linear(hidden_layer, n_actions)
+        self.fc_value = nn.Linear(hidden_layer, 1)
+
+    def _get_conv_out(self, shape):
+        conv_out = self.conv(torch.Tensor(1, *shape))
+        return int(np.prod(conv_out.size()))
 
     def forward(self, x):
         x = x / 255
-
-        # print("Input", x.shape)
-        output_conv = self.conv1(x)
-        output_conv = self.activation(output_conv)
-        output_conv = self.conv2(output_conv)
-        output_conv = self.activation(output_conv)
-        output_conv = self.conv3(output_conv)
-        output_conv = self.activation(output_conv)
-
-        # print("Before", output_conv.shape)
-        output_conv = output_conv.view(output_conv.size(0), -1)
-        # print("After", output_conv.shape)
-
-        output_advantage = self.advantage1(output_conv)
-        output_advantage = self.activation(output_advantage)
-        output_advantage = self.advantage2(output_advantage)
-
-        output_value = self.value1(output_conv)
-        output_value = self.activation(output_value)
-        output_value = self.value2(output_value)
-
-        output_final = output_value + output_advantage - output_advantage.mean()
-
-        return output_final
+        x = self.conv(x.float()).view(x.size()[0], -1) # (batch_size, num_features)
+        x = self.head(x)
+        adv = self.fc_advantage(x)
+        value = self.fc_value(x)
+        return value + adv - torch.mean(adv, dim=1, keepdim=True)
 
 
 class NNLunarLander(nn.Module):

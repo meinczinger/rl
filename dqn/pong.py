@@ -1,130 +1,96 @@
-from dqn.dqn_base import ConcreteDQN, DeepQLearning
-from dqn.neural_net import NeuralNetworkWithCNN, NNLunarLanderDueling
+from dqn.dqn_base import DeepQLearning, DQNFactory, DQNType
+from dqn.neural_net import NeuralNetworkWithCNN, NNLunarLanderDueling, NeuralNetworkWithCNNDueling
 from dqn.replay_buffer import ReplayBuffer
 from dqn.environment import DQNEnvironment
 from dqn.policy import PolicyEpsilongGreedy
+from dqn.temperature import Temperature
 import gymnasium as gym
 import torch
+import torch.nn.functional as F
 import random
-import matplotlib.pyplot as plt
 import numpy as np
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from dqn.hp_tuner import HPTuner
+from ray import tune
+from pytorch_lightning.loggers import TensorBoardLogger
 
-plt.style.use("_mpl-gallery")
-
-
-def preprocess_state(state, device):
-    # print(state.dtype)
-    state = np.expand_dims(state, axis=0)
-    # print("Process state", state.shape)
-    # state = state.transpose((2, 0, 1))
-    # print(state.shape)
-    state = torch.from_numpy(state)
-    state = state.to(device, dtype=torch.float32)
-    state = state.unsqueeze(1)
-    # state = state.transpose((2, 0, 1))
-    return state
-    # frame = np.expand_dims(frame, axis=0)
-    # frame = frame.transpose((2,0,1))
-    # frame = torch.from_numpy(frame)
-    # frame = frame.to(device, dtype=torch.float32)
-    # frame = frame.unsqueeze(1)
-
-    # return frame
-
-
-device = torch.device("cpu")
-# device = torch.device("mps")
-
-env_id = "PongNoFrameskip-v4"
-# env_id = "ALE/Pong-v5"
-# env = make_atari(env_id)
-# env = wrap_deepmind(env, frame_stack=True)
-
-env = gym.make(env_id, render_mode="human")
-# env = gym.make(env_id)
-# env = gym.wrappers.AtariPreprocessing(env, frame_skip=4)
-env = gym.wrappers.AtariPreprocessing(env)
-
-seed_value = 23
-
-torch.manual_seed(seed_value)
-random.seed(seed_value)
-
-learning_rate = 0.0001
-num_episodes = 500
-gamma = 0.99
-
-hidden_layer = 512
-
-batch_size = 32
-experience_memory_size = 100000
-
-update_target_frequency = 2000
-
-report_interval = 20
-number_of_inputs = env.observation_space.shape[0]
-number_of_outputs = env.action_space.n
-
-# qnet_agent = ConcreteDQN(
-#     env,
-#     NeuralNetworkWithCNN(number_of_inputs, hidden_layer, number_of_outputs).to(device),
-#     learning_rate,
-#     device,
-#     gamma,
-#     preprocess_state_func=preprocess_state,
-#     egreedy=0.01,
-#     egreedy_final=0.01,
-#     egreedy_decay=10000,
-#     save_model_frequency=10000,
-#     resume_previous_training=True,
-#     experience_memory_size=experience_memory_size,
-#     batch_size=batch_size,
-#     target_net=NeuralNetworkWithCNN(
-#         number_of_inputs, hidden_layer, number_of_outputs
-#     ).to(device),
-#     update_target_frequency=update_target_frequency,
-# )
-
-# qnet_agent.learn(num_episodes, seed_value, report_interval)
 
 env = DQNEnvironment("PongNoFrameskip-v4", atari_game=True)
 
-dqn = DeepQLearning(
-    env.env,
-    policy=PolicyEpsilongGreedy(device),
-    q_net=NeuralNetworkWithCNN(hidden_layer, number_of_inputs, number_of_outputs),
-)
+obs_shape = env.env.observation_space.shape
+number_of_outputs = env.env.action_space.n
+hidden_layer = 512
 
-# env = DQNEnvironment("LunarLander-v2")
+device = "mps"
 
-# dqn = DeepQLearning(
-#     env.env,
-#     policy=PolicyEpsilongGreedy(device),
-#     q_net=NNLunarLanderDueling(
-#         hidden_layer, env.observation_size(), env.number_of_actions()
-#     ),
-# )
+seed = 27
 
-device = "cpu"
+def train():
+    save_dir = "/Users/meinczinger/github/rl/"
 
-match (device):
-    case "cpu":
-        trainer = Trainer(
-            max_epochs=10_000,
-            callbacks=[
-                EarlyStopping(monitor="episode/Return", mode="max", patience=500)
-            ],
-        )
-    case "mps":
-        trainer = Trainer(
-            max_epochs=10_000,
-            callbacks=[
-                EarlyStopping(monitor="episode/Return", mode="max", patience=500)
-            ],
-            accelerator="mps",
-            devices=1,
-        )
+    dqn = DeepQLearning(
+        env.env,
+        seed=seed,
+        policy=PolicyEpsilongGreedy(device),
+        q_net=NeuralNetworkWithCNN(hidden_layer, obs_shape, number_of_outputs), loss_fn=F.mse_loss, optim=torch.optim.Adam, gamma=0.99, lr= 0.0001, batch_size=128, sync_rate=1000, \
+            frames_per_epoch=50, double_dqn=False, capacity=50000, replay_initial=10000, samples_per_epoch=1600, priority_buffer=False, epsilon=Temperature(1.0, 0.02, 100000)
+    )
 
-trainer.fit(dqn)
+    logger = TensorBoardLogger(save_dir=save_dir)
+    match (device):
+        case "cpu":
+            trainer = Trainer(
+                max_epochs=100000,
+                callbacks=[
+                    EarlyStopping(monitor="episode/avg_return", mode="max", stopping_threshold=18.0, patience=10000)
+                ],
+                logger=logger,
+            )
+        case "mps":
+            trainer = Trainer(
+                max_epochs=100000,
+                callbacks=[
+                    EarlyStopping(monitor="episode/avg_return", mode="max", stopping_threshold=18.0, patience=10000)
+                ],
+                accelerator="mps",
+                devices=1,
+                logger=logger,
+            )
+    
+    trainer.fit(dqn)
+
+def tune_hp():
+
+    env = DQNEnvironment("PongNoFrameskip-v4", atari_game=True)
+
+    obs_shape = env.env.observation_space.shape
+    number_of_outputs = env.env.action_space.n
+    hidden_layer = 512       
+
+    device = "cpu"
+
+    policy = PolicyEpsilongGreedy(device)
+    q_net = NeuralNetworkWithCNN(hidden_layer, obs_shape, number_of_outputs)
+    save_dir = "/Users/meinczinger/github/rl/lightning_logs/hp_tune"
+    logger = TensorBoardLogger(save_dir=save_dir)
+
+
+    hp = HPTuner(
+        nr_of_studies=50,
+        nr_of_epochs=3000,
+        logger=logger,
+        config={"frames_per_epoch": tune.lograndint(1, 1000), "samples_per_epoch": tune.lograndint(32, 16384)},
+    )
+
+
+    # hp.tune({"algo_type": DQNType.DQN, "env": env.env, "policy": policy, "q_net": q_net})
+    # best_hp = hp.tune(algo_type=DQNType.DQN, env=env.env, policy=policy, q_net=q_net, loss_fn=F.mse_loss, optim=torch.optim.Adam, gamma=0.99, lr= 0.0001, batch_size=32, sync_rate=1000, \
+    #     double_dqn=False, capacity=100000, replay_initial=10000, priority_buffer=False, epsilon=Temperature(1.0, 0.02, 100000))
+    best_hp = hp.tune()
+    print("Best hyperparameters found were: ", best_hp)
+
+
+# tune_hp()
+train()
+ 
