@@ -1,5 +1,8 @@
 from torch import nn
 import torch
+import torch.nn.functional as F
+import math
+from torch.nn.init import kaiming_uniform_, zeros_
 
 
 class NeuralNetwork(nn.Module):
@@ -127,3 +130,31 @@ class NNLunarLanderDueling(nn.Module):
         adv = self.fc_adv(x)
         value = self.fc_value(x)
         return value + adv - torch.mean(adv, dim=1, keepdim=True)
+
+
+class NoisyLinear(nn.Module):
+    def __init__(self, in_features, out_features, sigma) -> None:
+        super(NoisyLinear, self).__init__()
+
+        self.w_mu = nn.Parameter(torch.empty(out_features, in_features))
+        self.w_sigma = nn.Parameter(torch.empty(out_features, in_features))
+        self.b_mu = nn.Parameter(torch.empty(out_features))
+        self.b_sigma = nn.Parameter(torch.empty(out_features))
+
+        kaiming_uniform_(self.w_mu, a=math.sqrt(5))
+        kaiming_uniform_(self.w_sigma, a=math.sqrt(5))
+        zeros_(self.b_mu)
+        zeros_(self.b_sigma)
+
+    def forward(self, x, sigma=0.5):
+        if self.training:
+            w_noise = torch.normal(0, sigma, size=self.w_mu.size()).to(device)
+            b_noise = torch.normal(0, sigma, size=self.b_mu.size()).to(device)
+
+            return F.linear(
+                x,
+                self.w_mu + self.w_sigma * w_noise,
+                self.b_mu + self.b_sigma * b_noise,
+            )
+        else:
+            return F.linear(x, self.w_mu, self.b_mu)
