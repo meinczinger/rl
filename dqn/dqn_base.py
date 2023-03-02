@@ -32,10 +32,9 @@ from gymnasium.wrappers import RecordVideo, RecordEpisodeStatistics, TimeLimit
 from dqn.replay_buffer import ReplayBuffer, RLDataset
 from dqn.neural_net import NNLunarLander
 from dqn.temperature import Temperature
+from dqn.policy import PolicyEpsilongGreedy, PolicyGreedy
 
 import time
-
-
 
 
 class AbstractDQN(LightningModule):
@@ -44,7 +43,6 @@ class AbstractDQN(LightningModule):
 
 
 class DeepQLearning(AbstractDQN):
-
     # Initialize.
     def __init__(
         self,
@@ -53,14 +51,13 @@ class DeepQLearning(AbstractDQN):
         seed,
         q_net=torch.nn,
         capacity=100_000,
-        frames_per_epoch:int = 1,
-        priority_buffer:bool = False,
+        frames_per_epoch: int = 1,
+        priority_buffer: bool = False,
         batch_size=256,
         lr=1e-3,
         gamma=0.99,
         loss_fn=F.smooth_l1_loss,
         optim=AdamW,
-        epsilon: Temperature = Temperature(start=1.0, end=0.15, last_episode=100),
         replay_initial=1000,
         samples_per_epoch=1000,
         sync_rate=10,
@@ -69,7 +66,6 @@ class DeepQLearning(AbstractDQN):
         alpha: Temperature = Temperature(start=0.5, end=0.0, last_episode=100),
         beta: Temperature = Temperature(start=0.4, end=1.0, last_episode=100),
     ):
-
         super().__init__()
 
         self.env = env
@@ -85,10 +81,9 @@ class DeepQLearning(AbstractDQN):
         else:
             self.buffer = ReplayBuffer(capacity=capacity)
 
-        self.epsilon = epsilon
         self.alpha = alpha
         self.beta = beta
-        
+
         self.start_time = time.time()
 
         self.frames = 0
@@ -98,21 +93,20 @@ class DeepQLearning(AbstractDQN):
         # self.logger = TensorBoardLogger('lightning_logs')
 
         # self.save_hyperparameters()
-        self.save_hyperparameters(ignore=['q_net'])
-
+        self.save_hyperparameters(ignore=["q_net"])
 
         self.state, _ = self.env.reset(seed=self.hparams.seed)
 
         # while len(self.buffer) < self.hparams.replay_initial:
-            # print(f"{len(self.buffer)} samples in experience buffer. Filling...")
-        self.play_epoch(epsilon=self.epsilon.start, nr_of_steps=self.hparams.replay_initial)
+        # print(f"{len(self.buffer)} samples in experience buffer. Filling...")
+        self.play_epoch(nr_of_steps=self.hparams.replay_initial)
 
     @torch.no_grad()
-    def play_epoch(self, policy=None, epsilon=0.0, nr_of_steps:int = 1):
+    def play_epoch(self, policy=None, nr_of_steps: int = 1):
         for _ in range(nr_of_steps):
             if policy:
                 # print("Getting best action")
-                action = policy.get_action(self.state, self.env, self.q_net, epsilon=epsilon)
+                action = policy.get_action(self.state, self.env, self.q_net)
             else:
                 action = self.env.action_space.sample()
 
@@ -146,8 +140,6 @@ class DeepQLearning(AbstractDQN):
             if done:
                 self.state, _ = self.env.reset(seed=self.hparams.seed)
                 self.epochs += 1
-
-
 
     # Forward.
     def forward(self, x):
@@ -211,48 +203,59 @@ class DeepQLearning(AbstractDQN):
         expected_state_action_values = rewards + self.hparams.gamma * next_action_values
 
         if self.hparams.priority_buffer:
-            td_errors = (state_action_values - expected_state_action_values).abs().detach()
+            td_errors = (
+                (state_action_values - expected_state_action_values).abs().detach()
+            )
 
             for idx, e in zip(indices, td_errors):
                 self.buffer.update(idx, e.item())
 
-            loss = weights * self.hparams.loss_fn(state_action_values, expected_state_action_values, reduction='none')
+            loss = weights * self.hparams.loss_fn(
+                state_action_values, expected_state_action_values, reduction="none"
+            )
             loss = loss.mean()
-    
+
         else:
-            loss = self.hparams.loss_fn(state_action_values, expected_state_action_values)
-    
+            loss = self.hparams.loss_fn(
+                state_action_values, expected_state_action_values
+            )
+
         self.log("episode/Q-Error", loss)
         return loss
 
-
     # Training epoch end.
     def training_epoch_end(self, training_step_outputs):
-        epsilon = self.epsilon.calculate_temperature(self.frames)
-        
+        if type(self.policy) == PolicyEpsilongGreedy:
+            self.policy.update(self.frames)
+
         if self.hparams.priority_buffer:
             alpha = self.alpha.calculate_temperature(self.current_epoch)
             beta = self.beta.calculate_temperature(self.current_epoch, False)
             self.buffer.alpha = alpha
             self.buffer.beta = beta
 
-        
         # self.play_episode(policy=self.policy, epsilon=epsilon)
-        self.play_epoch(policy=self.policy, epsilon=epsilon, nr_of_steps=self.hparams.frames_per_epoch)
+        self.play_epoch(
+            policy=self.policy,
+            nr_of_steps=self.hparams.frames_per_epoch,
+        )
         # if done:
         self.log("episode/Return", self.env.return_queue[-1][0])
 
-        returns = list(self.env.return_queue)[-self.hparams.moving_average:]
+        returns = list(self.env.return_queue)[-self.hparams.moving_average :]
         self.log("episode/avg_return", np.mean(returns))
 
-        steps_per_episode = list(self.env.length_queue)[-self.hparams.moving_average:] 
+        steps_per_episode = list(self.env.length_queue)[-self.hparams.moving_average :]
         self.log("episode/episode_length", np.mean(steps_per_episode, dtype=np.float32))
 
-        self.log("episode/frames_per_sec", self.frames / (time.time() - self.start_time))
+        self.log(
+            "episode/frames_per_sec", self.frames / (time.time() - self.start_time)
+        )
 
         self.log("episode/frames", self.frames)
-        
-        self.log("episode/epsilon", epsilon)
+
+        if type(self.policy) == PolicyEpsilongGreedy:
+            self.log("episode/epsilon", self.policy.epsilon)
 
         self.log("episode/epochs", self.epochs)
 

@@ -53,7 +53,7 @@ class NeuralNetworkForDueling(nn.Module):
 
 
 class NeuralNetworkWithCNN(nn.Module):
-    def __init__(self, hidden_layer, obs_shape, n_actions):
+    def __init__(self, hidden_layer, obs_shape, n_actions, sigma=None):
         super(NeuralNetworkWithCNN, self).__init__()
 
         self.conv = nn.Sequential(
@@ -70,9 +70,13 @@ class NeuralNetworkWithCNN(nn.Module):
         conv_out_size = self._get_conv_out(obs_shape)
 
         self.fc = nn.Sequential(
-            nn.Linear(conv_out_size, hidden_layer),
+            nn.Linear(conv_out_size, hidden_layer)
+            if not sigma
+            else NoisyLinear(conv_out_size, hidden_layer, sigma=sigma),
             nn.ReLU(),
-            nn.Linear(hidden_layer, n_actions),
+            nn.Linear(hidden_layer, n_actions)
+            if not sigma
+            else NoisyLinear(hidden_layer, n_actions, sigma=sigma),
         )
 
     def _get_conv_out(self, shape):
@@ -80,7 +84,6 @@ class NeuralNetworkWithCNN(nn.Module):
         return int(np.prod(conv_out.size()))
 
     def forward(self, x):
-        # x = x / 255
         x = self.conv(x.float()).view(x.size()[0], -1)  # (batch_size, num_features)
         return self.fc(x)
 
@@ -88,7 +91,6 @@ class NeuralNetworkWithCNN(nn.Module):
 class NeuralNetworkWithCNNDueling(nn.Module):
     def __init__(self, hidden_layer, obs_shape, n_actions):
         super().__init__()
-        # super(NeuralNetworkWithCNN, self).__init__()
 
         self.conv = nn.Sequential(
             nn.Conv2d(
@@ -116,7 +118,6 @@ class NeuralNetworkWithCNNDueling(nn.Module):
         return int(np.prod(conv_out.size()))
 
     def forward(self, x):
-        x = x / 255
         x = self.conv(x.float()).view(x.size()[0], -1)  # (batch_size, num_features)
         x = self.head(x)
         adv = self.fc_advantage(x)
@@ -149,7 +150,6 @@ class NNLunarLanderDueling(nn.Module):
             nn.ReLU(),
         )
 
-        # Q(s, a) = V(s) + Adv(s, a)
         self.fc_value = nn.Linear(hidden_size, 1)
         self.fc_adv = nn.Linear(hidden_size, n_actions)
 
@@ -176,8 +176,8 @@ class NoisyLinear(nn.Module):
 
     def forward(self, x, sigma=0.5):
         if self.training:
-            w_noise = torch.normal(0, sigma, size=self.w_mu.size()).to(device)
-            b_noise = torch.normal(0, sigma, size=self.b_mu.size()).to(device)
+            w_noise = torch.normal(0, sigma, size=self.w_mu.size()).to("mps")
+            b_noise = torch.normal(0, sigma, size=self.b_mu.size()).to("mps")
 
             return F.linear(
                 x,
