@@ -35,7 +35,7 @@ class PolicyEpsilongGreedy(AbstractPolicy):
         return self._epsilon
 
     def update(self, steps: int):
-        self._epsiolon = self._temperature.calculate_temperature(steps)
+        self._epsilon = self._temperature.calculate_temperature(steps)
 
 
 class PolicyGreedy(AbstractPolicy):

@@ -37,10 +37,10 @@ def train():
     dqn = DeepQLearning(
         env.env,
         seed=seed,
-        # policy=PolicyEpsilongGreedy(device, Temperature(1.0, 0.02, 100000)),
-        policy=PolicyGreedy(device),
+        policy=PolicyEpsilongGreedy(device, Temperature(1.0, 0.02, 100000)),
+        # policy=PolicyGreedy(device),
         q_net=NeuralNetworkWithCNN(
-            hidden_layer, obs_shape, number_of_outputs, sigma=0.5
+            hidden_layer, obs_shape, number_of_outputs
         ),
         loss_fn=F.mse_loss,
         optim=torch.optim.Adam,
