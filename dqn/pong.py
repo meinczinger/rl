@@ -40,7 +40,7 @@ def train():
         policy=PolicyEpsilongGreedy(device, Temperature(1.0, 0.02, 100000)),
         # policy=PolicyGreedy(device),
         q_net=NeuralNetworkWithCNN(
-            hidden_layer, obs_shape, number_of_outputs
+            hidden_layer, obs_shape, number_of_outputs, # sigma=0.017
         ),
         loss_fn=F.mse_loss,
         optim=torch.optim.Adam,
@@ -54,6 +54,7 @@ def train():
         replay_initial=10000,
         samples_per_epoch=1600,
         priority_buffer=False,
+        n_steps=3
     )
 
     logger = TensorBoardLogger(save_dir=save_dir)

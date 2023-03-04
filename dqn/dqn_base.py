@@ -65,6 +65,7 @@ class DeepQLearning(AbstractDQN):
         moving_average: int = 25,
         alpha: Temperature = Temperature(start=0.5, end=0.0, last_episode=100),
         beta: Temperature = Temperature(start=0.4, end=1.0, last_episode=100),
+        n_steps: int = 1
     ):
         super().__init__()
 
@@ -103,6 +104,8 @@ class DeepQLearning(AbstractDQN):
 
     @torch.no_grad()
     def play_epoch(self, policy=None, nr_of_steps: int = 1):
+        transitions = []
+
         for _ in range(nr_of_steps):
             if policy:
                 # print("Getting best action")
@@ -122,9 +125,7 @@ class DeepQLearning(AbstractDQN):
             # print("After step", next_state)
             # print(reward, type(reward))
             # print(reward.dtype)
-            if type(reward) == int:
-                reward = np.float32(reward)
-            if type(reward) == float:
+            if type(reward) in [int, float]:
                 reward = np.float32(reward)
 
             exp = (
@@ -134,12 +135,24 @@ class DeepQLearning(AbstractDQN):
                 done,
                 next_state,
             )
-            self.buffer.append(exp)
+            if self.hparams.n_steps > 1:
+                transitions.append(exp)
+            else:
+                self.buffer.append(exp)
+
             self.state = next_state
 
             if done:
                 self.state, _ = self.env.reset(seed=self.hparams.seed)
                 self.epochs += 1
+
+        if self.hparams.n_steps > 1:
+            for i, (s, a, r, d, sn) in enumerate(transitions):
+                batch = transitions[i:i + self.hparams.n_steps]
+                ret = np.float32(sum([t[2] * self.hparams.gamma**j for j, t in enumerate(batch)]))
+                _, _, _, ld, ls = batch[-1]
+                self.buffer.append((s, a, ret, ld, ls))
+
 
     # Forward.
     def forward(self, x):
@@ -171,15 +184,15 @@ class DeepQLearning(AbstractDQN):
     def training_step(self, batch, batch_idx):
         # print("training_step")
         if not self.hparams.priority_buffer:
-            states, actions, rewards, dones, next_states = batch
+            states, actions, returns, dones, next_states = batch
         else:
-            indices, weights, states, actions, rewards, dones, next_states = batch
+            indices, weights, states, actions, returns, dones, next_states = batch
             weights = weights.unsqueeze(1)
         # if states.shape[0] < self.hparams.batch_size:
         #     return 0
 
         actions = actions.unsqueeze(1)
-        rewards = rewards.unsqueeze(1)
+        returns = returns.unsqueeze(1)
         dones = dones.unsqueeze(1)
         states = states.unsqueeze(1)
         next_states = next_states.unsqueeze(1)
@@ -200,7 +213,7 @@ class DeepQLearning(AbstractDQN):
                 )
                 next_action_values[dones] = 0.0
 
-        expected_state_action_values = rewards + self.hparams.gamma * next_action_values
+        expected_state_action_values = returns + self.hparams.gamma**self.hparams.n_steps * next_action_values
 
         if self.hparams.priority_buffer:
             td_errors = (

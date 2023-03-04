@@ -84,7 +84,7 @@ class NeuralNetworkWithCNN(nn.Module):
         return int(np.prod(conv_out.size()))
 
     def forward(self, x):
-        x = self.conv(x.float()).view(x.size()[0], -1)  # (batch_size, num_features)
+        x = self.conv(x.to(torch.float32)).view(x.size()[0], -1)  # (batch_size, num_features)
         return self.fc(x)
 
 
@@ -118,7 +118,7 @@ class NeuralNetworkWithCNNDueling(nn.Module):
         return int(np.prod(conv_out.size()))
 
     def forward(self, x):
-        x = self.conv(x.float()).view(x.size()[0], -1)  # (batch_size, num_features)
+        x = self.conv(x.to(torch.float32)).view(x.size()[0], -1)  # (batch_size, num_features)
         x = self.head(x)
         adv = self.fc_advantage(x)
         value = self.fc_value(x)
@@ -137,7 +137,7 @@ class NNLunarLander(nn.Module):
         )
 
     def forward(self, x):
-        return self.net(x.float())
+        return self.net(x.to(torch.float32))
 
 
 class NNLunarLanderDueling(nn.Module):
@@ -154,7 +154,7 @@ class NNLunarLanderDueling(nn.Module):
         self.fc_adv = nn.Linear(hidden_size, n_actions)
 
     def forward(self, x):
-        x = self.net(x.float())
+        x = self.net(x.to(torch.float32))
         adv = self.fc_adv(x)
         value = self.fc_value(x)
         return value + adv - torch.mean(adv, dim=1, keepdim=True)
@@ -164,6 +164,7 @@ class NoisyLinear(nn.Module):
     def __init__(self, in_features, out_features, sigma) -> None:
         super(NoisyLinear, self).__init__()
 
+        self._sigma = sigma
         self.w_mu = nn.Parameter(torch.empty(out_features, in_features))
         self.w_sigma = nn.Parameter(torch.empty(out_features, in_features))
         self.b_mu = nn.Parameter(torch.empty(out_features))
@@ -174,10 +175,10 @@ class NoisyLinear(nn.Module):
         zeros_(self.b_mu)
         zeros_(self.b_sigma)
 
-    def forward(self, x, sigma=0.5):
+    def forward(self, x):
         if self.training:
-            w_noise = torch.normal(0, sigma, size=self.w_mu.size()).to("mps")
-            b_noise = torch.normal(0, sigma, size=self.b_mu.size()).to("mps")
+            w_noise = torch.normal(0, self._sigma, size=self.w_mu.size()).to("mps")
+            b_noise = torch.normal(0, self._sigma, size=self.b_mu.size()).to("mps")
 
             return F.linear(
                 x,
